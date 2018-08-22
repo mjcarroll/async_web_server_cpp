@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+from collections import OrderedDict
 import os
 import sys
 
@@ -12,8 +13,79 @@ from launch import LaunchService
 from launch.event_handlers import OnProcessExit
 
 
+class LaunchTestDescription(LaunchDescription):
+
+    def __init__(self, *args, **kwargs):
+        super(LaunchTestDescription, self).__init__(*args, **kwargs)
+        self.__test_processes = []
+        self.__test_returncodes = OrderedDict()
+
+    @property
+    def test_returncodes(self):
+        return self.__test_returncodes.values()
+
+    def add_test_action(self, action):
+        """
+        Add an action used for testing.
+
+        If either all test actions exited with a return code of zero or any
+        test action exited with a non-zero return code a shutdown event is
+        emitted.
+        """
+        assert isinstance(action, launch.actions.ExecuteProcess), \
+            "Non-process test actions aren't supported at the moment"
+        self.add_action(action)
+        if isinstance(action, launch.actions.ExecuteProcess):
+            self.__test_processes.append(action)
+
+            def on_test_process_exit(event, context):
+                nonlocal action
+                nonlocal self
+                self.__test_returncodes[action] = event.returncode
+
+                if len(self.__test_returncodes) == len(self.__test_processes):
+                    shutdown_event = launch.events.Shutdown(
+                        reason='all tests finished')
+                    return launch.actions.EmitEvent(event=shutdown_event)
+
+            self.add_action(launch.actions.RegisterEventHandler(OnProcessExit(
+                target_action=action, on_exit=on_test_process_exit,
+            )))
+
+
+class LaunchTestService(LaunchService):
+
+    def __init__(self, *args, **kwargs):
+        super(LaunchTestService, self).__init__(*args, **kwargs)
+        self.__test_descriptions = []
+
+    def include_launch_description(self, launch_description):
+        super(LaunchTestService, self).include_launch_description(
+            launch_description)
+        if isinstance(launch_description, LaunchTestDescription):
+            self.__test_descriptions.append(launch_description)
+
+    def run(self, *args, **kwargs):
+        """
+        Invokes the `run` method of the parent class.
+
+        :returns: If the return value of the parent method is zero but any of
+          the test processes exited with a non-zero return code the return of
+          the first failed test process is returned.
+        """
+        rc = super(LaunchTestService, self).run(*args, **kwargs)
+        for d in self.__test_descriptions:
+            if rc:
+                break
+            for test_process_rc in d.test_returncodes:
+                if test_process_rc:
+                    rc = test_process_rc
+                    break
+        return rc
+
+
 def main(argv=sys.argv[1:]):
-    ld = LaunchDescription()
+    ld = LaunchTestDescription()
 
     web_server_action = launch.actions.ExecuteProcess(
         cmd=['@TEST_WEB_SERVER_EXECUTABLE@'])
@@ -21,37 +93,21 @@ def main(argv=sys.argv[1:]):
 
     test_directory = '@CMAKE_CURRENT_SOURCE_DIR@'
 
-    # TODO only support a single test process for now
-
-    # test1_action = launch.actions.ExecuteProcess(
-    #     cmd=[
-    #         sys.executable, '-u',
-    #         os.path.join(test_directory, 'simple_http_requests_test.py')])
-    # ld.add_action(test1_action)
+    test1_action = launch.actions.ExecuteProcess(
+        cmd=[
+            sys.executable, '-u',
+            os.path.join(test_directory, 'simple_http_requests_test.py')])
+    ld.add_test_action(test1_action)
 
     test2_action = launch.actions.ExecuteProcess(
         cmd=[
             sys.executable, '-u',
             os.path.join(test_directory, 'websocket_test.py')])
-    ld.add_action(test2_action)
+    ld.add_test_action(test2_action)
 
-    test2_action_rc = None
-
-    def test2_action_on_exit(event, context):
-        nonlocal test2_action_rc
-        test2_action_rc = event.returncode
-        shutdown_event = launch.events.Shutdown(reason='test finished')
-        action = launch.actions.EmitEvent(event=shutdown_event)
-        return action
-
-    ld.add_action(launch.actions.RegisterEventHandler(OnProcessExit(
-        target_action=test2_action, on_exit=test2_action_on_exit,
-    )))
-
-    ls = LaunchService(argv=argv)
+    ls = LaunchTestService(argv=argv)
     ls.include_launch_description(ld)
-    rc = ls.run()
-    return rc or test2_action_rc
+    return ls.run()
 
 
 if __name__ == '__main__':
