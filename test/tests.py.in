@@ -1,0 +1,58 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+import launch
+import launch.actions
+import launch.events
+import launch.substitutions
+from launch import LaunchDescription
+from launch import LaunchService
+from launch.event_handlers import OnProcessExit
+
+
+def main(argv=sys.argv[1:]):
+    ld = LaunchDescription()
+
+    web_server_action = launch.actions.ExecuteProcess(
+        cmd=['@TEST_WEB_SERVER_EXECUTABLE@'])
+    ld.add_action(web_server_action)
+
+    test_directory = '@CMAKE_CURRENT_SOURCE_DIR@'
+
+    # TODO only support a single test process for now
+
+    # test1_action = launch.actions.ExecuteProcess(
+    #     cmd=[
+    #         sys.executable, '-u',
+    #         os.path.join(test_directory, 'simple_http_requests_test.py')])
+    # ld.add_action(test1_action)
+
+    test2_action = launch.actions.ExecuteProcess(
+        cmd=[
+            sys.executable, '-u',
+            os.path.join(test_directory, 'websocket_test.py')])
+    ld.add_action(test2_action)
+
+    test2_action_rc = None
+
+    def test2_action_on_exit(event, context):
+        nonlocal test2_action_rc
+        test2_action_rc = event.returncode
+        shutdown_event = launch.events.Shutdown(reason='test finished')
+        action = launch.actions.EmitEvent(event=shutdown_event)
+        return action
+
+    ld.add_action(launch.actions.RegisterEventHandler(OnProcessExit(
+        target_action=test2_action, on_exit=test2_action_on_exit,
+    )))
+
+    ls = LaunchService(argv=argv)
+    ls.include_launch_description(ld)
+    rc = ls.run()
+    return rc or test2_action_rc
+
+
+if __name__ == '__main__':
+    sys.exit(main())
