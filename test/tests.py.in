@@ -13,71 +13,52 @@ from launch import LaunchService
 from launch.event_handlers import OnProcessExit
 
 
-class LaunchTestDescription(LaunchDescription):
+class LaunchTestService():
 
-    def __init__(self, *args, **kwargs):
-        super(LaunchTestDescription, self).__init__(*args, **kwargs)
+    def __init__(self):
         self.__test_processes = []
         self.__test_returncodes = OrderedDict()
 
-    @property
-    def test_returncodes(self):
-        return self.__test_returncodes.values()
-
-    def add_test_action(self, action):
+    def add_test_action(self, launch_description, action):
         """
-        Add an action used for testing.
+        Add action used for testing.
 
         If either all test actions exited with a return code of zero or any
         test action exited with a non-zero return code a shutdown event is
         emitted.
         """
         assert isinstance(action, launch.actions.ExecuteProcess), \
-            "Non-process test actions aren't supported at the moment"
-        self.add_action(action)
-        if isinstance(action, launch.actions.ExecuteProcess):
-            self.__test_processes.append(action)
+            'The passed actions must be ExecuteProcess actions'
 
-            def on_test_process_exit(event, context):
-                nonlocal action
-                nonlocal self
-                self.__test_returncodes[action] = event.returncode
+        self.__test_processes.append(action)
 
-                if len(self.__test_returncodes) == len(self.__test_processes):
-                    shutdown_event = launch.events.Shutdown(
-                        reason='all tests finished')
-                    return launch.actions.EmitEvent(event=shutdown_event)
+        def on_test_process_exit(event, context):
+            nonlocal action
+            nonlocal self
+            self.__test_returncodes[action] = event.returncode
 
-            self.add_action(launch.actions.RegisterEventHandler(OnProcessExit(
+            if len(self.__test_returncodes) == len(self.__test_processes):
+                shutdown_event = launch.events.Shutdown(
+                    reason='all tests finished')
+                return launch.actions.EmitEvent(event=shutdown_event)
+
+        launch_description.add_action(
+            launch.actions.RegisterEventHandler(OnProcessExit(
                 target_action=action, on_exit=on_test_process_exit,
-            )))
+            ))
+        )
 
-
-class LaunchTestService(LaunchService):
-
-    def __init__(self, *args, **kwargs):
-        super(LaunchTestService, self).__init__(*args, **kwargs)
-        self.__test_descriptions = []
-
-    def include_launch_description(self, launch_description):
-        super(LaunchTestService, self).include_launch_description(
-            launch_description)
-        if isinstance(launch_description, LaunchTestDescription):
-            self.__test_descriptions.append(launch_description)
-
-    def run(self, *args, **kwargs):
+    def run(self, launch_service, *args, **kwargs):
         """
-        Invokes the `run` method of the parent class.
+        Invokes the `run` method of the launch service.
 
         :returns: If the return value of the parent method is zero but any of
           the test processes exited with a non-zero return code the return of
           the first failed test process is returned.
         """
-        rc = super(LaunchTestService, self).run(*args, **kwargs)
-        for d in self.__test_descriptions:
-            if rc:
-                break
-            for test_process_rc in d.test_returncodes:
+        rc = launch_service.run(*args, **kwargs)
+        if not rc:
+            for test_process_rc in self.__test_returncodes.values():
                 if test_process_rc:
                     rc = test_process_rc
                     break
@@ -85,7 +66,7 @@ class LaunchTestService(LaunchService):
 
 
 def main(argv=sys.argv[1:]):
-    ld = LaunchTestDescription()
+    ld = LaunchDescription()
 
     web_server_action = launch.actions.ExecuteProcess(
         cmd=['@TEST_WEB_SERVER_EXECUTABLE@'])
@@ -97,17 +78,21 @@ def main(argv=sys.argv[1:]):
         cmd=[
             sys.executable, '-u',
             os.path.join(test_directory, 'simple_http_requests_test.py')])
-    ld.add_test_action(test1_action)
+    ld.add_action(test1_action)
 
     test2_action = launch.actions.ExecuteProcess(
         cmd=[
             sys.executable, '-u',
             os.path.join(test_directory, 'websocket_test.py')])
-    ld.add_test_action(test2_action)
+    ld.add_action(test2_action)
 
-    ls = LaunchTestService(argv=argv)
+    lts = LaunchTestService()
+    lts.add_test_action(ld, test1_action)
+    lts.add_test_action(ld, test2_action)
+
+    ls = LaunchService(argv=argv)
     ls.include_launch_description(ld)
-    return ls.run()
+    return lts.run(ls)
 
 
 if __name__ == '__main__':
