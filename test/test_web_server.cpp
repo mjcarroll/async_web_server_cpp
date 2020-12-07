@@ -2,34 +2,45 @@
 #include "async_web_server_cpp/http_reply.hpp"
 #include "async_web_server_cpp/websocket_connection.hpp"
 #include "async_web_server_cpp/websocket_request_handler.hpp"
+
+#include <atomic>
+#include <iostream>
+
 #include <signal.h>
-#include <ros/package.h>
 
 using namespace async_web_server_cpp;
 
-volatile bool should_shutdown = false;
-void sig_handler(int signo) {
+std::atomic<bool> should_shutdown = false;
+
+void sig_handler(int) {
   should_shutdown = true;
 }
 
-static void http_body_echo(const async_web_server_cpp::HttpRequest &request,
-		      async_web_server_cpp::HttpConnectionPtr connection, const std::string& body)
+static void http_body_echo(const async_web_server_cpp::HttpRequest & request,
+		      std::shared_ptr<async_web_server_cpp::HttpConnection> connection, const std::string& body)
 {
+  (void) request;
   HttpReply::builder(HttpReply::ok).write(connection);
   connection->write(body);
 }
 
 static bool http_path_echo(const async_web_server_cpp::HttpRequest &request,
-		      async_web_server_cpp::HttpConnectionPtr connection, const char* begin, const char* end)
+		      std::shared_ptr<async_web_server_cpp::HttpConnection> connection, const char* begin, const char* end)
 {
+  (void) begin;
+  (void) end;
+
   HttpReply::builder(HttpReply::ok).write(connection);
   connection->write(request.path);
   return true;
 }
 
 static bool http_query_echo(const async_web_server_cpp::HttpRequest &request,
-		      async_web_server_cpp::HttpConnectionPtr connection, const char* begin, const char* end)
+		      std::shared_ptr<async_web_server_cpp::HttpConnection> connection, const char* begin, const char* end)
 {
+  (void) begin;
+  (void) end;
+
   HttpReply::builder(HttpReply::ok).write(connection);
   for(std::map<std::string,std::string>::const_iterator itr = request.query_params.begin();
       itr != request.query_params.end(); ++ itr) {
@@ -42,11 +53,13 @@ class WebsocketEchoer {
 public:
   WebsocketEchoer(WebsocketConnectionPtr websocket) : websocket_(websocket) {}
   void operator()(const WebsocketMessage& message) {
+    std::cout << "echo" << std::endl;
     websocket_->sendMessage(message);
   }
 private:
   WebsocketConnectionPtr websocket_;
 };
+
 WebsocketConnection::MessageHandler websocket_echo(const HttpRequest& request, WebsocketConnectionPtr websocket)
 {
   return WebsocketEchoer(websocket);
@@ -79,6 +92,7 @@ int main(int argc, char **argv)
 
   handler_group.addHandlerForPath("/websocket_echo", WebsocketHttpRequestHandler(websocket_echo));
 
+  /*
   handler_group.addHandlerForPath("/test_files/.+", HttpReply::from_filesystem(HttpReply::ok,
 									       "/test_files/", ros::package::getPath("async_web_server_cpp") + "/test",
 										false));
@@ -87,6 +101,7 @@ int main(int argc, char **argv)
 											true));
   handler_group.addHandlerForPath("/test_file", HttpReply::from_file(HttpReply::ok, "text/html",
 								     ros::package::getPath("async_web_server_cpp") + "/test/test.html"));
+  */
 
   HttpServer server("0.0.0.0", "9849", handler_group, 1);
 

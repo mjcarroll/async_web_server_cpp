@@ -1,12 +1,13 @@
-#include <boost/bind.hpp>
-#include <boost/make_shared.hpp>
-#include <limits>
 #include "async_web_server_cpp/websocket_connection.hpp"
+
+#include <limits>
+
+using namespace std::placeholders;
 
 namespace async_web_server_cpp
 {
 
-WebsocketConnection::WebsocketConnection(HttpConnectionPtr connection)
+WebsocketConnection::WebsocketConnection(std::shared_ptr<HttpConnection> connection)
   : connection_(connection) {}
 
 void WebsocketConnection::set_message_handler(MessageHandler& handler)
@@ -52,38 +53,40 @@ bool WebsocketConnection::sendFrame(WebsocketFrame& frame)
 }
 
 
-void WebsocketConnection::static_handle_read(WebsocketConnectionWeakPtr weak_this, const char* begin, const char* end)
+void WebsocketConnection::static_handle_read(WebsocketConnection* _this, const char* begin, const char* end)
 {
-  WebsocketConnectionPtr _this = weak_this.lock();
   if (_this)
     _this->handle_read(begin, end);
 }
+
 void WebsocketConnection::handle_read(const char* begin, const char* end)
 {
-  boost::tribool frame_result;
+  std::optional<bool> frame_result;
   const char* parse_end = begin;
+
   while (parse_end < end)
   {
-    boost::tie(frame_result, parse_end) = frame_parser_.parse(frame_, parse_end, end);
-    if (frame_result)
+    std::tie(frame_result, parse_end) = frame_parser_.parse(frame_, parse_end, end);
+
+    if (frame_result.has_value() && frame_result)
     {
       frame_parser_.reset();
-      boost::tribool message_result = frame_buffer_.consume(message_, frame_);
+      auto message_result = frame_buffer_.consume(message_, frame_);
 
-      if (message_result)
+      if (message_result.has_value() && message_result)
       {
         if (handler_)
           handler_(message_);
       }
     }
-    else if (!frame_result)
+    else if (frame_result.has_value() && !frame_result)
     {
       frame_parser_.reset();
       message_.type = WebsocketMessage::type_unknown;
     }
   }
-  WebsocketConnectionWeakPtr this_weak(shared_from_this());
-  connection_->async_read(boost::bind(&WebsocketConnection::static_handle_read, this_weak, _1, _2));
+  auto weak_this = this->weak_from_this();
+  connection_->async_read(std::bind(&WebsocketConnection::static_handle_read, this, _1, _2));
 }
 
 }

@@ -11,9 +11,10 @@
 #ifndef CPP_WEB_SERVER_HTTP_REQUEST_PARSER_HPP
 #define CPP_WEB_SERVER_HTTP_REQUEST_PARSER_HPP
 
-#include <boost/logic/tribool.hpp>
-#include <boost/tuple/tuple.hpp>
 #include "async_web_server_cpp/http_request.hpp"
+
+#include <optional>
+#include <tuple>
 
 namespace async_web_server_cpp
 {
@@ -32,22 +33,22 @@ public:
   /// data is required. The InputIterator return value indicates how much of the
   /// input has been consumed.
   template<typename InputIterator>
-  boost::tuple<boost::tribool, InputIterator> parse(HttpRequest &req,
+  std::tuple<std::optional<bool>, InputIterator> parse(HttpRequest &req,
       InputIterator begin, InputIterator end)
   {
     while (begin != end)
     {
-      boost::tribool result = consume(req, *begin++);
-      if (result || !result)
-        return boost::make_tuple(result, begin);
+      std::optional<bool> result = consume(req, *begin++);
+      if (result.has_value())
+        return std::make_tuple(result, begin);
     }
-    boost::tribool result = boost::indeterminate;
-    return boost::make_tuple(result, begin);
+
+    return std::make_tuple(std::optional<bool>(), begin);
   }
 
 private:
   /// Handle the next character of input.
-  boost::tribool consume(HttpRequest &req, char input);
+  std::optional<bool> consume(HttpRequest &req, char input);
 
   /// Check if a byte is an HTTP character.
   static bool is_char(int c);

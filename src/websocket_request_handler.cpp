@@ -1,4 +1,3 @@
-#include <boost/regex.hpp>
 #include <openssl/sha.h>
 #include <openssl/hmac.h>
 #include <openssl/evp.h>
@@ -17,7 +16,7 @@ WebsocketHttpRequestHandler::WebsocketHttpRequestHandler(WebsocketRequestHandler
   : handler_(handler) {}
 
 
-bool WebsocketHttpRequestHandler::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool WebsocketHttpRequestHandler::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
   std::string connection_header = request.get_header_value_or_default("Connection", "");
   std::string upgrade_header = request.get_header_value_or_default("Upgrade", "");

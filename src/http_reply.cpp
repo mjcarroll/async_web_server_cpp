@@ -9,8 +9,8 @@
 //
 
 
-#include <boost/lexical_cast.hpp>
 #include <fstream>
+#include "async_web_server_cpp/http_connection.hpp"
 #include "async_web_server_cpp/http_reply.hpp"
 
 namespace async_web_server_cpp
@@ -54,46 +54,46 @@ const std::string bad_gateway =
 const std::string service_unavailable =
   "HTTP/1.0 503 Service Unavailable\r\n";
 
-boost::asio::const_buffer to_buffer(HttpReply::status_type status)
+asio::const_buffer to_buffer(HttpReply::status_type status)
 {
   switch (status)
   {
   case HttpReply::switching_protocols:
-    return boost::asio::buffer(switching_protocols);
+    return asio::buffer(switching_protocols);
   case HttpReply::ok:
-    return boost::asio::buffer(ok);
+    return asio::buffer(ok);
   case HttpReply::created:
-    return boost::asio::buffer(created);
+    return asio::buffer(created);
   case HttpReply::accepted:
-    return boost::asio::buffer(accepted);
+    return asio::buffer(accepted);
   case HttpReply::no_content:
-    return boost::asio::buffer(no_content);
+    return asio::buffer(no_content);
   case HttpReply::multiple_choices:
-    return boost::asio::buffer(multiple_choices);
+    return asio::buffer(multiple_choices);
   case HttpReply::moved_permanently:
-    return boost::asio::buffer(moved_permanently);
+    return asio::buffer(moved_permanently);
   case HttpReply::moved_temporarily:
-    return boost::asio::buffer(moved_temporarily);
+    return asio::buffer(moved_temporarily);
   case HttpReply::not_modified:
-    return boost::asio::buffer(not_modified);
+    return asio::buffer(not_modified);
   case HttpReply::bad_request:
-    return boost::asio::buffer(bad_request);
+    return asio::buffer(bad_request);
   case HttpReply::unauthorized:
-    return boost::asio::buffer(unauthorized);
+    return asio::buffer(unauthorized);
   case HttpReply::forbidden:
-    return boost::asio::buffer(forbidden);
+    return asio::buffer(forbidden);
   case HttpReply::not_found:
-    return boost::asio::buffer(not_found);
+    return asio::buffer(not_found);
   case HttpReply::internal_server_error:
-    return boost::asio::buffer(internal_server_error);
+    return asio::buffer(internal_server_error);
   case HttpReply::not_implemented:
-    return boost::asio::buffer(not_implemented);
+    return asio::buffer(not_implemented);
   case HttpReply::bad_gateway:
-    return boost::asio::buffer(bad_gateway);
+    return asio::buffer(bad_gateway);
   case HttpReply::service_unavailable:
-    return boost::asio::buffer(service_unavailable);
+    return asio::buffer(service_unavailable);
   default:
-    return boost::asio::buffer(internal_server_error);
+    return asio::buffer(internal_server_error);
   }
 }
 
@@ -230,18 +230,18 @@ std::string to_string(HttpReply::status_type status)
 
 } // namespace stock_replies
 
-std::vector<boost::asio::const_buffer> HttpReply::to_buffers(const std::vector<HttpHeader> &headers)
+std::vector<asio::const_buffer> HttpReply::to_buffers(const std::vector<HttpHeader> &headers)
 {
-  std::vector<boost::asio::const_buffer> buffers;
+  std::vector<asio::const_buffer> buffers;
   for (std::size_t i = 0; i < headers.size(); ++i)
   {
     const HttpHeader &h = headers[i];
-    buffers.push_back(boost::asio::buffer(h.name));
-    buffers.push_back(boost::asio::buffer(misc_strings::name_value_separator));
-    buffers.push_back(boost::asio::buffer(h.value));
-    buffers.push_back(boost::asio::buffer(misc_strings::crlf));
+    buffers.push_back(asio::buffer(h.name));
+    buffers.push_back(asio::buffer(misc_strings::name_value_separator));
+    buffers.push_back(asio::buffer(h.value));
+    buffers.push_back(asio::buffer(misc_strings::crlf));
   }
-  buffers.push_back(boost::asio::buffer(misc_strings::crlf));
+  buffers.push_back(asio::buffer(misc_strings::crlf));
   return buffers;
 }
 
@@ -264,7 +264,7 @@ FileHttpRequestHandler::FileHttpRequestHandler(HttpReply::status_type status,
 {
 }
 
-static bool serveFromFile(HttpReply::status_type status, const std::string& filename, const std::vector<HttpHeader>& headers, boost::shared_ptr<HttpConnection> connection) {
+static bool serveFromFile(HttpReply::status_type status, const std::string& filename, const std::vector<HttpHeader>& headers, std::shared_ptr<HttpConnection> connection) {
   std::ifstream file_stream(filename.c_str());
   std::stringstream file_buffer;
   file_buffer << file_stream.rdbuf();
@@ -272,13 +272,16 @@ static bool serveFromFile(HttpReply::status_type status, const std::string& file
 
   ReplyBuilder reply_builder_(status);
   reply_builder_.headers(headers);
-  reply_builder_.header("Content-Length", boost::lexical_cast<std::string>(content.size()));
+  reply_builder_.header("Content-Length", std::to_string(content.size()));
   reply_builder_.write(connection);
   connection->write(content);
   return true;
 }
-bool FileHttpRequestHandler::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool FileHttpRequestHandler::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
+  (void) request;
+  (void) begin;
+  (void) end;
   return serveFromFile(status_, filename_, headers_, connection);
 }
 
@@ -300,7 +303,7 @@ FilesystemHttpRequestHandler::FilesystemHttpRequestHandler(HttpReply::status_typ
 {
 }
 
-bool FilesystemHttpRequestHandler::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool FilesystemHttpRequestHandler::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
   if(request.path.find(path_root_) == 0) { // request.path startswith path_root
     std::string rel_path = request.path.substr(path_root_.length());
@@ -308,24 +311,24 @@ bool FilesystemHttpRequestHandler::operator()(const HttpRequest &request, boost:
       rel_path = rel_path.substr(1);
     }
 
-    boost::filesystem::path requested_path = filesystem_root_ / rel_path;
+    std::filesystem::path requested_path = filesystem_root_ / rel_path;
 
-    if(boost::filesystem::exists(requested_path)) {
-      if(boost::filesystem::is_directory(requested_path)) {
+    if(std::filesystem::exists(requested_path)) {
+      if(std::filesystem::is_directory(requested_path)) {
 	if(list_directories_) {
 	  std::stringstream content;
 	  content << "<html><body>";
 	  content << "<h1> Directory Listing: " << request.path << "</h1>";
-	  boost::filesystem::directory_iterator end_itr;
-	  for (boost::filesystem::directory_iterator itr(requested_path); itr != end_itr; ++itr) {
-	    if(boost::filesystem::is_directory(itr->status())) {
-	      content << "<a href=\"" << itr->path().leaf().generic_string() << "/\">";
-	      content << itr->path().leaf().generic_string() << "/";
+	  std::filesystem::directory_iterator end_itr;
+	  for (std::filesystem::directory_iterator itr(requested_path); itr != end_itr; ++itr) {
+	    if(std::filesystem::is_directory(itr->status())) {
+	      content << "<a href=\"" << itr->path().filename() << "/\">";
+	      content << itr->path().filename() << "/";
 	      content << "</a>";
 	    }
-	    else if(boost::filesystem::is_regular_file(itr->status())) {
-	      content << "<a href=\"" << itr->path().leaf().generic_string() << "\">";
-	      content << itr->path().leaf().generic_string();
+	    else if(std::filesystem::is_regular_file(itr->status())) {
+	      content << "<a href=\"" << itr->path().filename() << "\">";
+	      content << itr->path().filename();
 	      content << "</a>";
 	    }
 	    content << "<br>";
@@ -338,7 +341,7 @@ bool FilesystemHttpRequestHandler::operator()(const HttpRequest &request, boost:
 	}
 	return true;
       }
-      else if(boost::filesystem::is_regular_file(requested_path)) {
+      else if(std::filesystem::is_regular_file(requested_path)) {
 	serveFromFile(status_, requested_path.generic_string(), headers_, connection);
 	return true;
       }
@@ -366,7 +369,7 @@ HttpServerRequestHandler HttpReply::static_reply(HttpReply::status_type status,
     const std::vector<HttpHeader>& additional_headers)
 {
   std::vector<HttpHeader> headers;
-  headers.push_back(HttpHeader("Content-Length", boost::lexical_cast<std::string>(content.size())));
+  headers.push_back(HttpHeader("Content-Length", std::to_string(content.size())));
   headers.push_back(HttpHeader("Content-Type", content_type));
   std::copy(additional_headers.begin(), additional_headers.end(), headers.begin());
   return StaticHttpRequestHandler(status, headers, content);
@@ -381,8 +384,11 @@ StaticHttpRequestHandler::StaticHttpRequestHandler(HttpReply::status_type status
   reply_builder_.headers(headers);
 }
 
-bool StaticHttpRequestHandler::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool StaticHttpRequestHandler::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
+  (void) request;
+  (void) begin;
+  (void) end;
   reply_builder_.write(connection);
   connection->write(content_string_);
   return true;
@@ -416,7 +422,7 @@ ReplyBuilder &ReplyBuilder::headers(const std::vector<HttpHeader> &headers)
   return *this;
 }
 
-void ReplyBuilder::write(HttpConnectionPtr connection)
+void ReplyBuilder::write(std::shared_ptr<HttpConnection> connection)
 {
   connection->write(status_strings::to_buffer(status_), HttpConnection::ResourcePtr());
   connection->write(HttpReply::to_buffers(*headers_), headers_);

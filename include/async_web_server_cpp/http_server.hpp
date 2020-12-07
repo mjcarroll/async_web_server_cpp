@@ -1,16 +1,17 @@
 #ifndef CPP_WEB_SERVER_HTTP_SERVER_HPP
 #define CPP_WEB_SERVER_HTTP_SERVER_HPP
 
-#include <boost/asio.hpp>
-#include <string>
-#include <vector>
-#include <boost/noncopyable.hpp>
-#include <boost/function.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/thread/thread.hpp>
-
 #include "async_web_server_cpp/http_request_handler.hpp"
 #include "async_web_server_cpp/http_connection.hpp"
+
+#include <asio/error_code.hpp>
+#include <asio/io_service.hpp>
+#include <asio/ip/tcp.hpp>
+
+#include <string>
+#include <thread>
+#include <vector>
+
 
 namespace async_web_server_cpp
 {
@@ -21,12 +22,18 @@ namespace async_web_server_cpp
  * The server maintains a pool of threads to use to serve requests. Each request is dispatched to
  * the given request handler to be handled.
  */
-class HttpServer : private boost::noncopyable
+class HttpServer
 {
 public:
   HttpServer(const std::string &address, const std::string &port,
              HttpServerRequestHandler request_handler, std::size_t thread_pool_size);
   ~HttpServer();
+
+  HttpServer(const HttpServer&) = delete;
+  HttpServer& operator=(const HttpServer&) = delete;
+
+  HttpServer(HttpServer&&) = delete;
+  HttpServer& operator=(HttpServer&&) = delete;
 
   void run();
 
@@ -35,13 +42,13 @@ public:
 private:
   void start_accept();
 
-  void handle_accept(const boost::system::error_code &e);
+  void handle_accept(const asio::error_code &e);
 
-  boost::asio::io_service io_service_;
-  boost::asio::ip::tcp::acceptor acceptor_;
+  asio::io_service io_service_;
+  asio::ip::tcp::acceptor acceptor_;
   std::size_t thread_pool_size_;
-  std::vector<boost::shared_ptr<boost::thread> > threads_;
-  boost::shared_ptr<HttpConnection> new_connection_;
+  std::vector<std::shared_ptr<std::thread> > threads_;
+  std::shared_ptr<HttpConnection> new_connection_;
   HttpServerRequestHandler request_handler_;
 };
 

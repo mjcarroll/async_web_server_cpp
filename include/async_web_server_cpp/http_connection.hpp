@@ -1,21 +1,20 @@
 #ifndef CPP_WEB_SERVER_HTTP_CONNECTION_HPP
 #define CPP_WEB_SERVER_HTTP_CONNECTION_HPP
 
-#include <boost/asio.hpp>
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/thread/mutex.hpp>
+#include <asio/io_service.hpp>
+#include <asio/io_context_strand.hpp>
+#include <asio/ip/tcp.hpp>
+
 #include "async_web_server_cpp/http_request_handler.hpp"
 #include "async_web_server_cpp/http_request.hpp"
 #include "async_web_server_cpp/http_request_parser.hpp"
 
+#include <functional>
+#include <memory>
+#include <mutex>
+
 namespace async_web_server_cpp
 {
-
-class HttpConnection;
-typedef boost::shared_ptr<HttpConnection> HttpConnectionPtr;
-typedef boost::weak_ptr<HttpConnection> HttpConnectionWeakPtr;
 
 /**
  *  Represents a connection to a client
@@ -30,17 +29,22 @@ typedef boost::weak_ptr<HttpConnection> HttpConnectionWeakPtr;
  * calls to write need to be unseperated then calls to write should be locked
  * to prevent interleaving of different write calls.
  */
-class HttpConnection : public boost::enable_shared_from_this<HttpConnection>,
-  private boost::noncopyable
+class HttpConnection : public std::enable_shared_from_this<HttpConnection>
 {
 public:
-  typedef boost::function<void(const char* begin, const char* end)> ReadHandler;
-  typedef boost::shared_ptr<const void> ResourcePtr;
+  using ReadHandler = std::function<void(const char* begin, const char* end)>;
+  using ResourcePtr = std::shared_ptr<const void>;
 
-  explicit HttpConnection(boost::asio::io_service &io_service,
+  explicit HttpConnection(asio::io_service &io_service,
                           HttpServerRequestHandler request_handler);
 
-  boost::asio::ip::tcp::socket &socket();
+  HttpConnection(const HttpConnection&) = delete;
+  HttpConnection& operator=(const HttpConnection&) = delete;
+
+  HttpConnection(HttpConnection&&) = delete;
+  HttpConnection& operator=(HttpConnection&&) = delete;
+
+  asio::ip::tcp::socket &socket();
 
   /**
    * Start async operation to read request (normally called by server)
@@ -59,36 +63,36 @@ public:
 
   void write(const std::string &);
 
-  void write(const boost::asio::const_buffer &buffer,
+  void write(const asio::const_buffer &buffer,
              ResourcePtr resource);
 
-  void write(const std::vector<boost::asio::const_buffer> &buffer,
+  void write(const std::vector<asio::const_buffer> &buffer,
              ResourcePtr resource);
 
 private:
   void handle_read(const char* begin, const char* end);
   void handle_read_raw(ReadHandler callback,
-                       const boost::system::error_code &e,
+                       const asio::error_code &e,
                        std::size_t bytes_transferred);
 
   // Must be called while holding write lock
   void write_pending();
 
-  void handle_write(const boost::system::error_code &e,
+  void handle_write(const asio::error_code &e,
                     std::vector<ResourcePtr> resources);
 
-  boost::asio::io_service::strand strand_;
-  boost::asio::ip::tcp::socket socket_;
+  asio::io_service::strand strand_;
+  asio::ip::tcp::socket socket_;
   HttpServerRequestHandler request_handler_;
-  boost::array<char, 8192> buffer_;
+  std::array<char, 8192> buffer_;
   HttpRequest request_;
   HttpRequestParser request_parser_;
 
-  boost::mutex write_mutex_;
+  std::mutex write_mutex_;
   bool write_in_progress_;
-  std::vector<boost::asio::const_buffer> pending_write_buffers_;
+  std::vector<asio::const_buffer> pending_write_buffers_;
   std::vector<ResourcePtr> pending_write_resources_;
-  boost::system::error_code last_error_;
+  asio::error_code last_error_;
   ReadHandler read_handler_;
 };
 
