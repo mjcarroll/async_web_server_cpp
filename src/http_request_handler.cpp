@@ -1,11 +1,11 @@
-#include <boost/regex.hpp>
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/bind.hpp>
-#include <boost/enable_shared_from_this.hpp>
 #include "async_web_server_cpp/http_request_handler.hpp"
 #include "async_web_server_cpp/http_connection.hpp"
 #include "async_web_server_cpp/http_reply.hpp"
+
+#include <functional>
+#include <regex>
+
+using namespace std::placeholders;
 
 namespace async_web_server_cpp
 {
@@ -19,17 +19,17 @@ class PathMatcher
 {
 public:
   explicit PathMatcher(const std::string &path_regex_string)
-    : path_regex_(boost::regex(path_regex_string))
+    : path_regex_(std::regex(path_regex_string))
   {
   }
 
   bool operator()(const HttpRequest &request)
   {
-    return regex_match(request.path, path_regex_);
+    return std::regex_match(request.path, path_regex_);
   }
 
 private:
-  const boost::regex path_regex_;
+  const std::regex path_regex_;
 };
 
 void HttpRequestHandlerGroup::addHandlerForPath(const std::string &path_regex, HttpServerRequestHandler handler)
@@ -43,7 +43,7 @@ void HttpRequestHandlerGroup::addHandler(HandlerPredicate predicate, HttpServerR
 }
 
 
-bool HttpRequestHandlerGroup::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool HttpRequestHandlerGroup::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
   for (int i = 0; i < handlers_.size(); ++i)
   {
@@ -58,19 +58,19 @@ bool HttpRequestHandlerGroup::operator()(const HttpRequest &request, boost::shar
 }
 
 class BodyCollectingConnection;
-typedef boost::shared_ptr<BodyCollectingConnection> BodyCollectingConnectionPtr;
-typedef boost::weak_ptr<BodyCollectingConnection> BodyCollectingConnectionWeakPtr;
-class BodyCollectingConnection : public boost::enable_shared_from_this<BodyCollectingConnection>,
-				 private boost::noncopyable
+typedef std::shared_ptr<BodyCollectingConnection> BodyCollectingConnectionPtr;
+typedef std::weak_ptr<BodyCollectingConnection> BodyCollectingConnectionWeakPtr;
+
+class BodyCollectingConnection : public std::enable_shared_from_this<BodyCollectingConnection>
 {
 public:
-  BodyCollectingConnection(HttpRequestBodyCollector::Handler handler, const HttpRequest &request, boost::shared_ptr<HttpConnection> connection)
+  BodyCollectingConnection(HttpRequestBodyCollector::Handler handler, const HttpRequest &request, std::shared_ptr<HttpConnection> connection)
     : handler_(handler), request_(request), connection_(connection), received_length_(0) {
     std::string length_str = request_.get_header_value_or_default("Content-Length", "");
     try {
-      length_ = boost::lexical_cast<ssize_t>(length_str);
+      length_ = std::stol(length_str);
     }
-    catch(const boost::bad_lexical_cast &) {
+    catch(...) {
       length_ = -1; //indicate error
     }
   }
@@ -91,14 +91,14 @@ public:
       handler_(request_, connection_, body_stream_.str().substr(0, length_));
     }
     else {
-      connection_->async_read(boost::bind(&BodyCollectingConnection::static_handle_read, shared_from_this(), _1, _2));
+      connection_->async_read(std::bind(&BodyCollectingConnection::static_handle_read, shared_from_this(), _1, _2));
     }
   }
 
 private:
   HttpRequestBodyCollector::Handler handler_;
   const HttpRequest request_;
-  boost::shared_ptr<HttpConnection> connection_;
+  std::shared_ptr<HttpConnection> connection_;
   std::stringstream body_stream_;
   ssize_t length_;
   size_t received_length_;
@@ -107,7 +107,7 @@ private:
 HttpRequestBodyCollector::HttpRequestBodyCollector(Handler handler)
   : handler_(handler) {}
 
-bool HttpRequestBodyCollector::operator()(const HttpRequest &request, boost::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
+bool HttpRequestBodyCollector::operator()(const HttpRequest &request, std::shared_ptr<HttpConnection> connection, const char* begin, const char* end)
 {
   BodyCollectingConnectionPtr collecting_connection(new BodyCollectingConnection(handler_, request, connection));
   collecting_connection->handle_read(begin, end);

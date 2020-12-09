@@ -1,10 +1,9 @@
 #ifndef CPP_WEB_SERVER_WEBSOCKET_MESSAGE_HPP
 #define CPP_WEB_SERVER_WEBSOCKET_MESSAGE_HPP
 
-#include <boost/asio.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/logic/tribool.hpp>
-#include <boost/tuple/tuple.hpp>
+#include <optional>
+#include <tuple>
+#include <vector>
 
 namespace async_web_server_cpp
 {
@@ -53,20 +52,24 @@ class WebsocketFrameParser
 {
 public:
   WebsocketFrameParser();
+
   void reset();
-  boost::tribool consume(WebsocketFrame& frame, char input);
+
+  std::optional<bool> consume(WebsocketFrame& frame, char input);
+
   template<typename InputIterator>
-  boost::tuple<boost::tribool, InputIterator> parse(WebsocketFrame& frame,
+  std::tuple<std::optional<bool>, InputIterator> parse(WebsocketFrame& frame,
       InputIterator begin, InputIterator end)
   {
     while (begin != end)
     {
-      boost::tribool result = consume(frame, *begin++);
-      if (result || !result)
-        return boost::make_tuple(result, begin);
+      auto result = consume(frame, *begin++);
+
+      if (result.has_value() && result)
+        return std::make_tuple(result, begin);
     }
-    boost::tribool result = boost::indeterminate;
-    return boost::make_tuple(result, begin);
+
+    return std::make_tuple(std::optional<bool>{}, begin);
   }
 
 private:
@@ -114,7 +117,7 @@ public:
 class WebsocketFrameBuffer
 {
 public:
-  boost::tribool consume(WebsocketMessage& message, WebsocketFrame& frame);
+  std::optional<bool> consume(WebsocketMessage& message, WebsocketFrame& frame);
 };
 
 

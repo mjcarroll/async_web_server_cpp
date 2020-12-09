@@ -1,13 +1,16 @@
 #ifndef CPP_WEB_SERVER_HTTP_REPLY_HPP
 #define CPP_WEB_SERVER_HTTP_REPLY_HPP
 
-#include <vector>
-#include <string>
-#include <boost/asio.hpp>
 #include "async_web_server_cpp/http_header.hpp"
 #include "async_web_server_cpp/http_connection.hpp"
 #include "async_web_server_cpp/http_request_handler.hpp"
-#include <boost/filesystem.hpp>
+
+#include <asio/buffer.hpp>
+
+#include <filesystem>
+#include <memory>
+#include <string>
+#include <vector>
 
 namespace async_web_server_cpp
 {
@@ -40,7 +43,7 @@ struct HttpReply
     service_unavailable = 503
   } status;
 
-  static std::vector<boost::asio::const_buffer> to_buffers(const std::vector<HttpHeader> &headers);
+  static std::vector<asio::const_buffer> to_buffers(const std::vector<HttpHeader> &headers);
 
   /**
    * Create a request handler that sends a stock reply based on the stats code
@@ -107,11 +110,11 @@ public:
   /**
    * Send the headers over the connection
    */
-  void write(HttpConnectionPtr connection);
+  void write(std::shared_ptr<HttpConnection> connection);
 
 private:
   HttpReply::status_type status_;
-  boost::shared_ptr<std::vector<HttpHeader> > headers_;
+  std::shared_ptr<std::vector<HttpHeader> > headers_;
 };
 
 
@@ -125,7 +128,7 @@ public:
                            const std::vector<HttpHeader> &headers,
                            const std::string &content);
 
-  bool operator()(const HttpRequest &, boost::shared_ptr<HttpConnection>, const char* begin, const char* end);
+  bool operator()(const HttpRequest &, std::shared_ptr<HttpConnection>, const char* begin, const char* end);
 
 private:
   ReplyBuilder reply_builder_;
@@ -142,7 +145,7 @@ public:
 			 const std::string& filename,
 			 const std::vector<HttpHeader>& headers);
 
-  bool operator()(const HttpRequest &, boost::shared_ptr<HttpConnection>, const char* begin, const char* end);
+  bool operator()(const HttpRequest &, std::shared_ptr<HttpConnection>, const char* begin, const char* end);
 
 private:
   HttpReply::status_type status_;
@@ -162,13 +165,13 @@ public:
 			       bool list_directories,
 			       const std::vector<HttpHeader>& headers);
 
-  bool operator()(const HttpRequest &, boost::shared_ptr<HttpConnection>, const char* begin, const char* end);
+  bool operator()(const HttpRequest &, std::shared_ptr<HttpConnection>, const char* begin, const char* end);
 
 private:
   HttpReply::status_type status_;
   std::vector<HttpHeader> headers_;
   std::string path_root_;
-  boost::filesystem::path filesystem_root_;
+  std::filesystem::path filesystem_root_;
   bool list_directories_;
 };
 

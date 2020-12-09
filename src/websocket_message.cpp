@@ -94,14 +94,14 @@ void WebsocketFrameParser::reset()
   state_ = header_byte1;
 }
 
-boost::tribool WebsocketFrameParser::consume(WebsocketFrame& frame, char input)
+std::optional<bool> WebsocketFrameParser::consume(WebsocketFrame& frame, char input)
 {
   switch (state_)
   {
   case header_byte1:
     frame.header_bytes[0] = input;
     state_ = header_byte2;
-    return boost::indeterminate;
+    return {};
   case header_byte2:
     frame.header_bytes[1] = input;
     if (frame.header.len < 126)
@@ -126,36 +126,36 @@ boost::tribool WebsocketFrameParser::consume(WebsocketFrame& frame, char input)
       frame.length = 0;
       state_ = length_8bytes_left;
     }
-    return boost::indeterminate;
+    return {};
 
   case length_8bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 56);
     state_ = length_7bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_7bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 48);
     state_ = length_6bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_6bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 40);
     state_ = length_5bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_5bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 32);
     state_ = length_4bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_4bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 24);
     state_ = length_3bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_3bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 16);
     state_ = length_2bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_2bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 8);
     state_ = length_1bytes_left;
-    return boost::indeterminate;
+    return {};
   case length_1bytes_left:
     frame.length |= ((uint64_t)(input & 0xFF) << 0);
     frame.content.reserve(frame.length);
@@ -164,33 +164,33 @@ boost::tribool WebsocketFrameParser::consume(WebsocketFrame& frame, char input)
       state_ = mask_byte1;
     else
       state_ = body;
-    return boost::indeterminate;
+    return {};
 
 
   case mask_byte1:
     frame.mask[0] = input;
     state_ = mask_byte2;
-    return boost::indeterminate;
+    return {};
   case mask_byte2:
     frame.mask[1] = input;
     state_ = mask_byte3;
-    return boost::indeterminate;
+    return {};
   case mask_byte3:
     frame.mask[2] = input;
     state_ = mask_byte4;
-    return boost::indeterminate;
+    return {};
   case mask_byte4:
     frame.mask[3] = input;
     if (frame.length > 0)
       state_ = body;
     else
       return true;
-    return boost::indeterminate;
+    return {};
 
   case body:
     frame.content += input;
     if (frame.content.size() < frame.length)
-      return boost::indeterminate;
+      return {};
     //unmask the frame
     if (frame.header.mask)
     {
@@ -207,7 +207,7 @@ boost::tribool WebsocketFrameParser::consume(WebsocketFrame& frame, char input)
 
 WebsocketMessage::WebsocketMessage() : type(type_unknown) {}
 
-boost::tribool WebsocketFrameBuffer::consume(WebsocketMessage& message, WebsocketFrame& frame)
+std::optional<bool> WebsocketFrameBuffer::consume(WebsocketMessage& message, WebsocketFrame& frame)
 {
   if (frame.header.opcode == WebsocketFrame::Header::opcode_continuation)
   {
@@ -244,8 +244,7 @@ boost::tribool WebsocketFrameBuffer::consume(WebsocketMessage& message, Websocke
   if (frame.header.fin)
     return true;
   else
-    return boost::indeterminate;
+    return {};
 }
-
 
 }

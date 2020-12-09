@@ -1,11 +1,6 @@
 #ifndef CPP_WEB_SERVER_WEBSOCKET_CONNECTION_HPP
 #define CPP_WEB_SERVER_WEBSOCKET_CONNECTION_HPP
 
-#include <boost/asio.hpp>
-#include <boost/noncopyable.hpp>
-#include <boost/shared_ptr.hpp>
-#include <boost/enable_shared_from_this.hpp>
-#include <boost/thread/mutex.hpp>
 #include "async_web_server_cpp/http_connection.hpp"
 #include "async_web_server_cpp/websocket_message.hpp"
 
@@ -14,21 +9,26 @@ namespace async_web_server_cpp
 
 class WebsocketHttpRequestHandler;
 
-class WebsocketConnection;
-typedef boost::shared_ptr<WebsocketConnection> WebsocketConnectionPtr;
-typedef boost::weak_ptr<WebsocketConnection> WebsocketConnectionWeakPtr;
+  class WebsocketConnection;
+  using WebsocketConnectionPtr = std::shared_ptr<WebsocketConnection>;
+  using WebsocketConnectionWeakPtr = std::weak_ptr<WebsocketConnection>;
 
 /**
  *  Represents a websocket connection. Similar to an HttpConnection, to keep the
  * connection alive keep a shared pointer to this object.
  */
-class WebsocketConnection : public boost::enable_shared_from_this<WebsocketConnection>,
-  private boost::noncopyable
+class WebsocketConnection : std::enable_shared_from_this<WebsocketConnection>
 {
 public:
-  explicit WebsocketConnection(HttpConnectionPtr connection);
+  explicit WebsocketConnection(std::shared_ptr<HttpConnection> connection);
 
-  typedef boost::function<void(const WebsocketMessage& message)> MessageHandler;
+  WebsocketConnection(const WebsocketConnection&) = delete;
+  WebsocketConnection& operator=(const WebsocketConnection&) = delete;
+
+  WebsocketConnection(WebsocketConnection&&) = delete;
+  WebsocketConnection& operator=(WebsocketConnection&&) = delete;
+
+  using MessageHandler = std::function<void(const WebsocketMessage& message)>;
 
   bool sendTextMessage(const std::string& content);
   bool sendPingMessage(const std::string& content = "");
@@ -37,9 +37,9 @@ public:
   bool sendFrame(WebsocketFrame& frame);
 
 private:
-  static void static_handle_read(WebsocketConnectionWeakPtr weak_this, const char* begin, const char* end);
+  static void static_handle_read(WebsocketConnection* _this, const char* begin, const char* end);
   void handle_read(const char* begin, const char* end);
-  HttpConnectionPtr connection_;
+  std::shared_ptr<HttpConnection> connection_;
 
   void set_message_handler(MessageHandler& handler);
   MessageHandler handler_;

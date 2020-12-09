@@ -1,16 +1,25 @@
-#include <boost/regex.hpp>
-#include <boost/foreach.hpp>
-#include <boost/algorithm/string.hpp>
 #include "async_web_server_cpp/http_request.hpp"
+
+#include <regex>
+
+std::vector<std::string> split_string(const std::string &input, char delim) {
+  std::vector<std::string> tokens;
+  std::string token;
+  std::istringstream tokenStream(input);
+  while (std::getline(tokenStream, token, delim)) {
+    tokens.push_back(token);
+  }
+  return tokens;
+}
 
 namespace async_web_server_cpp
 {
 
-static boost::regex uri_regex("(.*?)(?:\\?(.*?))?");
+static std::regex uri_regex("(.*?)(?:\\?(.*?))?");
 
 bool HttpRequest::parse_uri()
 {
-  boost::smatch match;
+  std::smatch match;
   if (regex_match(uri, match, uri_regex))
   {
     path.assign(match[1].first, match[1].second);
@@ -19,11 +28,12 @@ bool HttpRequest::parse_uri()
       query.assign(match[2].first, match[2].second);
 
       std::vector<std::string> pair_strings;
-      boost::split(pair_strings, query, boost::is_any_of("&"));
-      BOOST_FOREACH(const std::string & pair_string, pair_strings)
+      pair_strings = split_string(query, '&');
+
+      for(const auto& pair_string: pair_strings)
       {
         std::vector<std::string> pair_data;
-        const int eq_index = pair_string.find_first_of('=');
+        auto eq_index = pair_string.find_first_of('=');
         if (eq_index == std::string::npos)
         {
           if (pair_string.size() > 0)

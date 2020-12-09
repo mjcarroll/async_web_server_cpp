@@ -1,6 +1,10 @@
 #include "async_web_server_cpp/http_server.hpp"
 #include "async_web_server_cpp/http_reply.hpp"
 
+#include <thread>
+
+#include <asio/io_service.hpp>
+
 namespace async_web_server_cpp
 {
 
@@ -9,11 +13,11 @@ HttpServer::HttpServer(const std::string &address, const std::string &port,
   : acceptor_(io_service_), thread_pool_size_(thread_pool_size), request_handler_(request_handler)
 {
 
-  boost::asio::ip::tcp::resolver resolver(io_service_);
-  boost::asio::ip::tcp::resolver::query query(address, port, boost::asio::ip::resolver_query_base::flags());
-  boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
+  asio::ip::tcp::resolver resolver(io_service_);
+  asio::ip::tcp::resolver::query query(address, port, asio::ip::resolver_query_base::flags());
+  asio::ip::tcp::endpoint endpoint = *resolver.resolve(query);
   acceptor_.open(endpoint.protocol());
-  acceptor_.set_option(boost::asio::ip::tcp::acceptor::reuse_address(true));
+  acceptor_.set_option(asio::ip::tcp::acceptor::reuse_address(true));
   acceptor_.bind(endpoint);
   acceptor_.listen();
 }
@@ -27,8 +31,10 @@ void HttpServer::run()
   start_accept();
   for (std::size_t i = 0; i < thread_pool_size_; ++i)
   {
-    boost::shared_ptr<boost::thread> thread(new boost::thread(
-        boost::bind(&boost::asio::io_service::run, &io_service_)));
+    std::shared_ptr<std::thread> thread(new std::thread(
+          [this](){
+            this->io_service_.run();
+          }));
     threads_.push_back(thread);
   }
 }
@@ -37,11 +43,10 @@ void HttpServer::start_accept()
 {
   new_connection_.reset(new HttpConnection(io_service_, request_handler_));
   acceptor_.async_accept(new_connection_->socket(),
-                         boost::bind(&HttpServer::handle_accept, this,
-                                     boost::asio::placeholders::error));
+                         std::bind(&HttpServer::handle_accept, this, std::placeholders::_1));
 }
 
-void HttpServer::handle_accept(const boost::system::error_code &e)
+void HttpServer::handle_accept(const asio::error_code &e)
 {
   if (!e)
   {
